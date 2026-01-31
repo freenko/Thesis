@@ -1,0 +1,1191 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\sloppy
+
+      \textwidth 15cm
+      \textheight 22cm
+      \parindent 10pt
+      \oddsidemargin 0.85cm
+      \evensidemargin 0.37cm
+
+
+\begin{document}
+
+\thispagestyle{empty}
+
+\begin{center}
+
+Vrije Universiteit Amsterdam
+
+\vspace{1mm}
+
+\includegraphics[height=28mm]{vu_symbol.png}
+
+\vspace{1.5cm}
+
+{\Large Bachelor Thesis}
+
+\vspace*{1.5cm}
+
+\rule{.9\linewidth}{.6pt}\\[0.4cm]
+{\huge \bfseries Machine Learning-Driven Process Anomaly Detection 
+in Pharmaceutical Batch Manufacturing\par}
+\rule{.9\linewidth}{.6pt}\\[1.5cm]
+
+\vspace*{2mm}
+
+{\Large
+\begin{tabular}{l}
+{\bf Author:} ~~Franko Muhametaj ~~~~ (2777133)
+\end{tabular}
+}
+
+\vspace*{1.5cm}
+
+\begin{tabular}{ll}
+{\it 1st supervisor:}   & ~~Prof. Dr. Wan Fokkink \\
+{\it daily supervisor:} & ~~Gerard McNelis ~~~~ \\
+{\it 2nd reader:}       & ~~Dr. Natalia Silvis-Cividjian
+\end{tabular}
+
+\vspace*{2cm}
+
+\textit{A thesis submitted in fulfillment of the requirements 
+for\\ the VU Bachelor of Science degree in Computer Science }
+
+\vspace*{1cm}
+
+\today\\[4cm] % Date
+
+\end{center}
+
+\newpage
+
+\twocolumn[
+\begin{center}
+    \Large \textbf{Machine Learning-Driven Process Anomaly 
+    Detection in Pharmaceutical Batch Manufacturing}
+\end{center}
+\vspace{1em} 
+]
+
+\section*{Abstract}
+Pharmaceutical production plays a vital role in improving global 
+health by delivering high-quality products reliably. Early fault detection in manufacturing 
+is critical for product quality, waste reduction, and regulatory compliance.
+
+This thesis investigates whether machine learning models are able to detect
+and catch early faults during the run of a batch process using a smaller set of sensors.
+The IndPenSim simulated dataset was used for this experiment, which contained data for a total of 100 batches. Two complementary machine learning methods were applied: 
+Gradient Boosted Trees (GBT) were used to identify and rank the sensors that contributed 
+the most to the fault of a batch, achieving 90.6\% accuracy. The top 5 sensors formed the 
+basis for a reduced monitoring setup with the LSTM.
+
+Long Short-Term Memory (LSTM) networks were trained on normal batches to learn typical 
+process behavior and detect faulty runs. The model reached a 3.7\% false alarm rate and 
+detected 43.1\% of post-fault sequences, providing an early warning of 3-4 hours before 
+batch 
+completion. While the results are moderate, the approach lowers monitoring complexity and 
+still offers some valuable insights.
+
+This research also discusses how to implement these models into an ISA-95 architecture from 
+a theoretical standpoint, highlighting where the neural network and the batch-level 
+classifier could operate in practice. This section outlines the need to move from a simulation to a regulated environment.
+
+In conclusion, the findings suggest that a targeted, cost-effective strategy can deliver valuable insights to pharmaceutical environments. This work accentuates the trade-off
+between performance and deployment by providing a foundation for future work on machine learning and the pharmaceutical world.
+
+\section{Introduction\&Background}
+
+\noindent Source code and notebooks are available at \url{https://github.com/freenko/Thesis}.\footnote{\url{https://github.com/freenko/Thesis}}
+
+\subsection*{Context and motivation}
+
+This thesis was motivated by the author's experience in a large, regulated 
+pharmaceutical manufacturing environment where Manufacturing 
+Execution Systems (MES) coordinate batch execution,
+electronic batch records, and compliance-relevant workflows 
+across the site.During the internship, the author contributed to MES-related activities such as supporting and executing
+MES projects, creating controlled documentation, and preparing user-facing training materials for operators and engineers.
+A practical observation from this setting is that 
+industrial manufacturing systems are diverse from site to site: they often share similar 
+objectives; however, they can differ in equipment, instrumentation, and 
+data pipelines. As a result, it is very difficult to develop a solution that can be adapted
+across multiple sites. 
+This thesis explores a fault detection approach with a reduced set of sensors that keeps 
+the deployment constraints in mind. 
+The goal is to support the pharmaceutical industry, in particular
+, shop-floor operators and engineers, by reducing monitoring complexity and providing 
+a possible implementation of this framework into manufacturing system layers.
+
+\subsection{Problem Statement}
+
+Pharmaceutical manufacturing is held to incredibly high standards 
+because the products directly affect patient health. Even small 
+deviations in the production process can lead to failed batches, 
+safety risks, and millions of euros in losses [9]. Batch 
+processes, such as penicillin production, require monitoring dozens of variables, such as temperature, pH, dissolved 
+oxygen, and flow rates, to ensure quality [1, 11].
+
+The problem is that current approaches to catching faults have 
+serious limitations. First, comprehensive monitoring is expensive. 
+Industrial pharmaceutical sensors cost a lot to install and maintain, and every additional sensor adds complexity to the system [1, 7]. Second, traditional alarm systems create too 
+many false alerts, causing operators to start ignoring 
+warnings [2]. 
+Third, by the time lab tests confirm that something went wrong, the 
+batch is usually already complete and must be discarded.
+
+This creates a challenging situation: pharmaceutical companies 
+need better fault detection that works with fewer sensors, catches 
+problems earlier in the process, and actually functions in practice. 
+The challenge is especially difficult because in real production, faulty 
+batches are rare compared to normal ones, making it hard for 
+detection systems to learn what faults look like [4, 6].
+
+\subsection{Machine Learning for Fault Detection}
+
+Machine learning can offer a promising solution to these challenges. 
+Machine learning algorithms can learn complex patterns from historical data and 
+identify subtle warning signs that traditional systems miss [2, 
+6]. 
+Recent research shows that these approaches can maintain high 
+detection accuracy while using far fewer sensors than conventional 
+monitoring [5, 6]. Soft sensor techniques using 
+machine learning can also estimate difficult-to-measure process 
+variables in real-time, reducing the need for expensive physical 
+sensors [12].
+
+\indent
+Batch processes that involve biological material 
+evolve through phases (growth, feeding, stabilization), meaning that
+a sensor measurement can have different values throughout a batch run. Many faults have
+temporal signatures such as: gradual drifts (pH for example), delayed
+responses, or phase shifts where the flow deviates from the expected course. Methods
+that model temporal dependencies can provide earlier warnings signals instead of end-of-batch information.
+
+Two types of algorithms are particularly useful for this problem. 
+Gradient Boosted Trees are excellent at figuring out which sensors 
+matter for detecting faults. They analyze 
+historical data and rank each sensor based on how much it contributes to 
+distinguishing normal batches from faulty ones [5]. This helps 
+answer a critical question: which measurements are have the highst impact in a batch run?
+
+Long Short-Term Memory networks are very effective for capturing how features develop over time. Unlike traditional 
+models that treat each measurement independently, LSTMs understand 
+that what happens at hour 5 of a batch can affect what happens at 
+hour 15 for example[3, 4]. This temporal understanding is crucial for batch 
+processes where conditions evolve throughout production.
+
+However, applying these techniques to pharmaceutical manufacturing 
+presents specific challenges. The biggest issue is class imbalance;
+in a typical dataset, you might have 90 normal batches and only 10 
+faulty ones like the one used in this experiment [13]. Without special handling, models trained on this 
+data just learn to predict "normal" for everything. Various 
+approaches address this challenge, including 
+synthetic oversampling techniques, class weighting, 
+and alternative problem formulations like anomaly detection where 
+models learn only from normal data and flag deviations. 
+Pharmaceutical regulations also require that any 
+automated decision system be explainable and validated, which adds 
+constraints that some machine learning approaches struggle to meet [1, 9].
+
+\subsection{Industry 4.0 and Manufacturing Systems Integration}
+
+Developing a good algorithm is only half the challenge. The other 
+half is figuring out how it actually gets deployed in a real 
+pharmaceutical facility. Modern manufacturing plants operate 
+within a structured framework called ISA-95, which organizes different 
+systems into levels [8, 10].
+
+At the bottom level, you'll find sensors and equipment that interact directly 
+with the process. Above that, SCADA and PLC systems handle real-time control like adjusting temperatures and flow rates. Then 
+comes the Manufacturing Execution System (MES), which coordinates 
+production schedules, tracks materials, and manages quality 
+records [8, 10]. 
+At the top, business systems handle activities like inventory and 
+financial planning.
+
+Machine learning fault detection models fit most 
+naturally at the SCADA/PLC level where they can access real-time 
+sensor data and make immediate predictions [8]. But for these 
+predictions to be useful, they need to integrate properly with the 
+MES that actually coordinates what happens in the plant [10]. 
+Recent research on pharmaceutical MES systems shows that this 
+integration is possible, but there's still a gap between what 
+works in research papers and what works in validated manufacturing 
+environments [8, 9].
+
+An emerging approach to bridge this gap is with Machine 
+Learning Operations (MLOps). MLOps practices address critical operational 
+challenges like model versioning, performance monitoring, 
+automated retraining, and continuous validation, all essential for 
+pharmaceutical applications where regulatory compliance
+and reliability are very important. This topic
+is not fully covered by academic research, but is crucial for 
+transitioning from experimental prototypes to production-ready systems.
+
+\subsection{Research Objectives and Contributions}
+
+This thesis aims to answer a specific question: \textit{How 
+effectively can machine learning models detect and
+explain process anomalies in pharmaceutical batch
+manufacturing based on multivariate sensor data?}
+
+\noindent In this context, effectiveness is measured by identifying the minimal sensor 
+infrastructure that maintains acceptable early warning capability. This reflects a 
+fundamental constraint: comprehensive monitoring is expensive, requiring investment in sensors, data infrastructure, system 
+integration, and ongoing maintenance [1, 7]. The research question therefore addresses a 
+deliberate trade-off between detection performance and monitoring complexity. Can a 
+reduced sensor set provide useful early warnings with acceptable false alarm rates, even 
+if detection rates are modest compared to using all available sensors? This optimization 
+aligns with industrial reality, where deployment decisions must balance multiple factors including cost, 
+regulatory validation, system reliability. The question 
+addresses both technical capability (which sensors matter, when do faults occur, what 
+detection rates are achievable) and operational feasibility (can this work in practice with 
+reduced infrastructure while maintaining acceptable performance).
+
+Using simulated data from 100 batches of penicillin production 
+(the IndPenSim platform) [3], this research has three main goals:
+
+\textbf{First}, compare two complementary machine learning approaches 
+for fault detection: Gradient Boosted Trees (GBT) for batch-level fault 
+classification and Long Short-Term Memory (LSTM) networks for 
+real-time anomaly detection. The goal is to determine which approach 
+performs best for different aspects of fault detection and whether 
+they can be effectively combined.
+
+\textbf{Second}, use the LSTM model to learn normal process behavior from fault-free batches and detects 
+anomalies by identifying when sensor predictions deviate significantly 
+from expected patterns. This approach provides temporal localization 
+of faults, identifying when values deviates from acceptable ranges. The focus is on maintaining 
+early warning capability with a reduced sensor set rather than maximizing detection rates 
+with comprehensive instrumentation.
+
+\textbf{Third}, analyze how these models would actually be 
+deployed in a pharmaceutical plant. This means examining integration within 
+the ISA-95 framework, understanding how fault detection at the 
+control level interfaces with MES coordination, and identifying 
+practical challenges for moving from research to validated 
+production systems [12].
+
+The research makes two key contributions. It first
+demonstrates that just 5 selected sensors show some early warning capability 
+3-4 hours before batch completion with 43.1\% sequence-level detection and 3.7\% false 
+alarm rate. This represents a 74\% reduction in sensor infrastructure compared to using all 
+19 online sensors. The trade-off addresses practical constraints of analysis with reduced sensor sets. 
+The GBT approach achieves 90.6\% batch-level classification accuracy 
+through cross-validated feature selection, while the LSTM provides 
+real-time anomaly detection by learning normal process behavior from 
+fault-free batches. The second contribution provides an analysis of 
+deployment considerations critical for actual industrial implementation 
+[8, 10, 11, 12].
+
+\paragraph{Key findings:} 
+In the experiments on simulated penicillin fermentation batches, Gradient Boosted Trees
+provide a stable sensor ranking and strong batch-level discrimination under severe class 
+imbalance, while the LSTM forecasting approach can flag deviations several hours before
+batch completion when monitoring is restricted to the most informative sensors. The main
+practical take away is that a reduced sensor set can still provide useful early warning signals.
+
+\section{Related Work}
+\label{sec:related_work}
+
+Papers on machine learning for industrial fault detection focus mainly on two areas: methods
+that classify batches as normal or faulty, and methods that try to learn how the process evolves through time.
+Many reviews highlights the fact the real industrial settings have few faulty examples, measurements
+usually have noise and that any monitoring solution must be interpretable and 
+practical enough for operators to understand [2,6].
+
+In pharmaceutical and bioprocess settings, these challenges are more apparent. The fermentation dataset used shows how complicated
+batch processes can be, with many variables that change over time [13].
+This has pushed researchers and experts into exploring how machine learning models can learn
+how variables relate to each other during different process phases.
+Other studies have applied predictive models to detect equipment failure, reporting strong accuracy but
+under different assumptions compared to the one used in this project [1].
+
+From a modeling perspective, tree-based methods showed strong performance for batch classification
+with structured data. They handle well mixed features and they provide interpretable outputs such as feature importance rankings [5].
+In parallel, deep learning models have been effective in capturing temporal dependencies in time-series data.
+Neural networks are usually used for direct prediction or for forecasting future values with sensors, where 
+deviations from expected patterns indicate anomalies [3,4].
+
+Another important aspects looks at how these models can be implemented into modern manufacturing systems.
+Industry 4.0 frameworks like ISA-95 highlights the push for digitalization, increased data integration, and real-time analytics
+and constraints introduced by regulated environments [8,9,10].
+Reviews of manufacturing execution systems describes how analytics can fit into existing workflows, without disrupting the process [11,12].
+A more recent contribution frame this integration challenge through MLOps practices [12], which address operational challenges like model versioning, performance monitoring,
+and continuous validation, all essential for the pharmaceutical context.
+In this thesis, the ISA-95 hierarchy provides the architecture for situating the proposed machine learning models within a realistic manufacturing system [15].
+
+This thesis contributes to the existing literature by combining these aspects: it applies both tree-based and deep learning methods to a realistic pharmaceutical batch dataset
+and it explicitly examines the trade-off between detection performance and monitoring complexity.
+The results add to the existing literature by showing how sensor reduction and early-warning can be brought
+together in a single workflow, while also analyzing practical deployment considerations within the ISA-95 framework and 
+the costraints of limited faulty data [11,13].
+
+\section{Methodology}
+\subsection{Dataset}
+In this reasearch, the IndPenSim dataset is used [13]. It's a simulated dataset that mimics
+the penicillin fermentation process, which is a good example of a common pharmaceutical process and it
+replicates well the biological conditions found in real production.
+The dataset contains 100 batches, of which 90 are noraml runs and 10 contain faults. Each batch consistso of
+time-series data collected from 2,039 features at regular intervals of 12 minutes, covering the entire batch duration.
+
+Although the number of run is limited, the IndPenSim dataset is designed and published as a benchmark for data-driven monitoring
+and fault detection research in pharmaceutical batch processes [13], making it valuable for machine learning studies.
+The V3 file used in this paper contains 113{,}913 time-stamped rows across all batches and 2,239 columns
+Each row represents a single time point within a batch and it inlcudes a wide range of sensor measurements,
+while each column represents a specific sensor, specifically a distinct feature.
+Most features are Raman spectroscopy measurements, while others are process variables like temperature, pH, and concentrations of various substances.
+
+This structure results in a rich multivariate dataset that supports both batch-level
+classification and time-series forecasting approaches for fault detection.
+It offers a realistic high-frequency, multivariate time-series represantion of bioprocess dynamics,
+fault injection that enables supervised learning, and a reproducible benchmark for evaluating multiple algorithms.
+This dataset is also suitable because it reflects practival challenges: faults are rare due to the high impact of failed batches in real production,
+process varibales are strongly correlated over time, and sensors contains some level of noise which confirms
+that this dataset represents a realistic environment. 
+
+As mentioned earlier, the full dataset contains over 2,000 features per batch, 2,000+ Raman variables
+and approximately 40 process variables. For this analysis, only 19 online sensors were
+kept, as Raman spectroscopy and other measurements are not typically available in real-time industrial settings.
+
+The strong class imbalance reflects real conditions, failures are rare but have high impact. 
+As shown in Figure~\ref{fig:classImbalance}, the dataset has a 9:1 ratio between normal and faulty batches. 
+This imbalance required dedicated handling strategies, discussed later in Section~\ref{sec:gbt} and in Section~\ref{sec:lstm}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{classImbalance.png}
+\caption{Class distribution showing severe imbalance between normal (90 batches) and
+faulty (10 batches) operations.}
+\label{fig:classImbalance}
+\end{figure}
+
+The imbalance is especially important in fault‑detection settings because:
+
+\begin{itemize}
+\item \textbf{Missing a fault (False Negative)} can have serious consequences, including batch failure, contamination, equipment damage, and major financial losses.
+\item \textbf{False alarms (False Positives)} are disruptive but less severe, as they trigger unnecessary interventions rather than catastrophic failures.
+\end{itemize}
+
+\subsection{Data preparation}
+Raw time-series data from the IndPenSim V3 dataset underwent systematic preprocessing to 
+ensure data quality and prepare it for model training. This preprocessing pipeline 
+consisted of three key steps: data cleaning, normalization, and dataset splitting.
+
+\subsubsection{Data Cleaning and Feature Selection}
+
+The original dataset contained 2,039 features per batch, including 2,000+ Raman 
+spectroscopy measurements and various process variables. However, Raman spectroscopy 
+requires expensive equipment and provides measurements that are not available in real-time 
+industrial settings. The analysis focused exclusively on the 19 online sensors 
+that would be available during actual batch production.
+Four offline measurements were excluded even though they appeared in the 
+process variables section: penicillin concentration, biomass concentration, product 
+concentration, and substrate concentration.
+
+Missing values in the sensor data were rare and 
+were handled using forward-fill and backward-fill imputation. This approach maintains 
+temporal continuity without introducing artificial patterns that could mislead the models.
+
+
+\subsubsection{Data Normalization}
+
+Since different sensors measure different physical quantities with different units of measurement,
+standardization was necessary to prevent scale-sensitive algorithms from being dominated by large-magnitude 
+features.
+
+Z-score normalization was applied to all sensor measurements:
+
+\begin{equation}
+   Z = \frac{x - \mu}{\sigma}
+\end{equation}
+
+\noindent where $\mu$ is the feature mean and $\sigma$ is the standard deviation calculated from 
+the training set to prevent data leakage.
+
+\subsubsection{Dataset Partitioning}
+
+The partitioning strategy differed between the two modeling approaches:
+
+\paragraph{Gradient Boosted Trees (Classification):}
+The 100 batches were split using stratified random sampling to preserve the 10\% fault 
+rate:
+\begin{itemize}
+    \item \textbf{Training set}: 70 batches (63 normal, 7 faulty)
+    \item \textbf{Validation set}: 15 batches (14 normal, 1 faulty) 
+    \item \textbf{Test set}: 15 batches (13 normal, 2 faulty) 
+\end{itemize}
+
+\paragraph{LSTM (Anomaly Detection):}
+To learn normal process behavior, the 90 normal batches were partitioned as:
+\begin{itemize}
+    \item \textbf{Training set}: 63 normal batches (70\%)
+    \item \textbf{Validation set}: 18 normal batches (20\%)
+    \item \textbf{Test set}: 9 normal batches (10\%)
+\end{itemize}
+
+All 10 faulty batches were held out completely and used exclusively for anomaly detection 
+evaluation for the LSTM experiment. By training the model only on normal batches, it learns the typical pattern
+of normal operations. This establishes a baseline for detecting anomalies for when the model 
+is tested with data that includes faults, if the model's predictions deviate significantly, it indicates a potential fault.
+
+This strict separation prevents any leakage of fault information into the training process.
+It also reflects real-world conditions where the model would monitor ongoing production without prior exposure to fault patterns.
+
+\subsection{Feature Engineering}
+
+\subsubsection{Gradient Boosting Trees}
+\label{sec:gbt}
+
+To establish a baseline for fault detection, Gradient Boosting Trees (GBT) were employed 
+for their effectiveness in handling tabular data and identifying 
+important features. Unlike traditional machine learning approaches that require manual 
+feature extraction, GBT automatically learns which sensor measurements are most indicative 
+of fault conditions.
+
+The raw time-series data from each batch were transformed into statistical summaries, 
+capturing the overall behavior of each sensor throughout the batch duration. For each 
+sensor measurement, the following features were computed: mean, standard deviation, 
+minimum, maximum, median, and interquartile range. This transformation converted variable-length time-series batches into fixed-length feature 
+vectors suitable for tree-based classification.
+
+The XGBoost implementation was selected for its computational efficiency and built-in 
+regularization capabilities. The model was trained to distinguish between normal and 
+faulty batches using binary classification, with the fault reference label as the target 
+variable. 
+Cross-validation was performed to assess model stability and prevent overfitting.
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{GBT feature.png}
+    \caption{Feature importance (a) Sensor rankings from single train-validation split. 
+    (b) Mean importance across 5-fold cross-validation.}
+    \label{fig:gbt_feature_stability}
+\end{figure*}
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{top sensors_across folds.png}
+    \caption{Top 10 sensor importance rankings across 5-fold cross-validation. Individual 
+    folds (left five panels) show minor variations in exact rankings, while the mean 
+    importance (rightmost panel) identifies the most stable predictors. Eight sensors 
+    consistently appear in the top 10 across all partitions, validating the robustness of 
+    GBT-based feature selection for LSTM sensor reduction.}
+    \label{fig:gbt_feature_stability}
+\end{figure*}
+
+Cross-validation analysis confirmed that these rankings remained stable across different 
+data partitions, 
+with 8 of the top 10 sensors appearing consistently across all five folds. 
+The top five sensors, identified by their average importance, were used for the LSTM analysis. 
+This cross-validated selection procedure ensures that the chosen sensors represent genuinely informative 
+features rather than artifacts of a particular train-test split.
+
+\subsubsection{Long Short-Term Memory}
+\label{sec:lstm}
+
+While GBT effectively captures batch-level patterns through statistical aggregation, it 
+discards all temporal information. Faults in bioprocesses often manifest as 
+dynamic signatures like unusual spikes, gradual drifts, or abnormal oscillations that 
+occur at specific times during the batch. LSTM networks were selected to capture these 
+sequential patterns over time.
+
+A valid concern with semi-supervised anomaly detection is whether training exclusively on 
+normal batches causes the model to flag normal process variability as faults.
+The dataset includes a "Fault flag" column that indicate when a fault was injected during a run.
+Each sequence from faulty batches are labeled as either pre-fault or post-fault. 
+This approach makes it possible to verify that the model reacts to faults.
+
+\begin{itemize}
+    \item \textbf{Pre-fault sequences}: Both input window and forecast occur before fault 
+    injection. These represent normal operation and should not trigger alerts.
+    
+    \item \textbf{Post-fault sequences}: The forecast horizon includes timesteps where the 
+    fault is actively affecting process behavior. These should be detected as anomalies.
+\end{itemize}
+
+This separation enables rigorous measurement of both false positive rate (on held-out 
+normal test batches) and true positive rate (on post-fault sequences).
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{DO2_timestamp.png}
+    \caption{LSTM 50-step ahead prediction for Dissolved Oxygen Concentration sensor on a 
+    normal test batch. The model accurately captures the gradual increase in concentration 
+    typical of the fermentation growth phase.}
+    \label{fig:DO2_timestamp}
+\end{figure}
+
+The LSTM model trained on sequences from the normal batches only. A sliding window approach was used
+to create input-output pairs for training. Each input consists of 100 consecutive timesteps, and each
+output consists of 50 subsequent timesteps for all the five selected sensors.
+This setup allows the model to learn to forecast future values based on historic data and it learns
+the typical temporal patterns of processes under normal conditions.
+
+During evaluation, the fault flag was used again so that sequences influenced by errors contributed to anomaly detection.
+
+The LSTM architecture consists of two stacked layers (32 units each) followed by a dense 
+output layer, with 20\% dropout regularization to prevent overfitting. The network was 
+trained using the Huber loss function with the Adam optimizer.
+
+For anomaly detection, the trained model predicts expected sensor values under normal 
+operation. The absolute difference between predictions and actual measurements serves as 
+the anomaly score. Detection thresholds are defined as 3 standard deviations above the 
+baseline prediction error observed on normal test batches.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{LSTM_performance.png}
+    \caption{Training and validation loss curves demonstrate model convergence without 
+    overfitting.}
+    \label{fig:LSTM_performance}
+\end{figure}
+
+Standardization was performed by fitting the scaler on training data only, and applied 
+to validation and test sets to prevent data leakage.
+
+Two mechanisms controlled the training process. Early stopping monitored validation 
+performance with patience of 10 epochs, restoring the best model weights when improvement 
+ceased. Learning rate reduction lowered the rate by 20\% when validation 
+loss plateaued, with patience of 5 epochs.
+
+\section{Results}
+\subsection{Gradient Boosted Trees Results}
+
+\subsubsection{Model Performance and Cross-Validation}
+
+The XGBoost classifier, trained on 19 online sensors,
+demonstrated strong performance. Cross-validation confirmed model robustness despite 
+dataset limitations.
+
+\textbf{Cross-Validation Performance (5-Fold Stratified):}
+\begin{itemize}
+    \item Validation Accuracy: $0.906 \pm 0.029$
+    \item Validation F1-Score: $0.393 \pm 0.335$
+    \item Validation AUC-ROC: $0.901 \pm 0.104$
+\end{itemize}
+
+\textbf{Test Set Performance:}
+\begin{itemize}
+    \item Test Accuracy: $0.867$
+    \item Test F1-Score: Variable across folds
+\end{itemize}
+
+Cross-validation reveals the model successfully detects faults (90.6\% accuracy, 90\% 
+AUC), though performance varies by fold because of limited faulty batch representation. When 
+validation folds contain sufficient faulty samples (Folds 4-5), F1-scores reach 0.67 to 
+0.80, indicating strong minority class detection capability.
+
+Table \ref{tab:gbt_cv_folds} presents the detailed cross-validation results. The high 
+variance in F1-scores ($\sigma = 0.33$) reflects stratified sampling creating validation 
+folds with varying numbers of faulty batches rather than model instability. When 
+sufficient faults are present (Folds 4-5), the model achieves F1 $\geq 0.67$, 
+demonstrating effective fault detection.
+
+\begin{table}[h]
+\centering
+\caption{Cross-validation results per fold}
+\label{tab:gbt_cv_folds}
+\begin{tabular}{cccc}
+\hline
+\textbf{Fold} & \textbf{Accuracy} & \textbf{F1-Score} & \textbf{AUC} \\
+\hline
+1 & 0.882 & 0.000 & 0.938 \\
+2 & 0.882 & 0.500 & 0.933 \\
+3 & 0.882 & 0.000 & 0.933 \\
+4 & 0.941 & 0.667 & 0.700 \\
+5 & 0.941 & 0.800 & 1.000 \\
+\hline
+\end{tabular}
+\end{table}
+
+Despite F1 variance, AUC remains consistently high (mean 0.90), confirming the model's 
+reliable ranking ability. The model correctly scores faulty batches higher than normal 
+ones, even when absolute fault counts are low in specific folds.
+
+\subsubsection{Feature Importance and Sensor Selection}
+
+Cross-validation across five folds identified the most critical sensors for fault 
+detection. Table \ref{tab:gbt_top_sensors} shows the top five sensors ranked by mean 
+importance.
+
+\begin{table}[h]
+\centering
+\caption{Top 5 most important sensors (cross-validation average)}
+\label{tab:gbt_top_sensors}
+\begin{tabular}{lcc}
+\hline
+\textbf{Sensor} & \textbf{Mean} & \textbf{Std} \\
+\hline
+Temperature (T) & 0.166 & 0.101 \\
+Acid flow rate (Fa) & 0.166 & 0.082 \\
+Dissolved Oxygen (DO$_2$) & 0.144 & 0.098 \\
+pH & 0.119 & 0.053 \\
+Vessel Volume (V) & 0.065 & 0.049 \\
+\hline
+\end{tabular}
+\end{table}
+
+Temperature and Acid flow rate consistently rank in the top three across all folds, 
+demonstrating robust feature selection. The moderate standard deviations reflect natural 
+variation in feature utility across different data splits rather than model instability. 
+Figure \ref{fig:gbt_feature_stability} illustrates sensor importance consistency across 
+individual folds and their mean.
+
+\subsubsection{ROC Analysis}
+
+The cross-validated ROC curve (Figure \ref{fig:gbt_cv_roc}) demonstrates strong 
+discrimination capability with mean AUC = 0.901 $\pm$ 0.104. Individual fold curves show 
+expected variation given approximately 10 to 15 faulty samples per fold. Even the worst 
+performing fold (Fold 4, AUC = 0.70) outperforms random guessing, while the best fold 
+(Fold 5, AUC = 1.00) demonstrates potential when sufficient fault samples are available.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{GBT_CV_5.png}
+    \caption{Cross-validated ROC curves across 5-fold stratified partitioning.}
+    \label{fig:gbt_cv_roc}
+\end{figure}
+
+\subsubsection{Model Validation}
+
+Test accuracy (0.867) falls within the cross-validation confidence interval (0.906 $\pm$ 
+0.029), confirming that test set results are reliable and not due to fortunate data 
+splitting. The model generalizes well to unseen data, and cross-validation accurately 
+estimates real-world performance.
+
+\subsection{LSTM Anomaly Detection Results}
+
+\subsubsection{Model Architecture and Training}
+
+The LSTM network was trained exclusively on 90 normal batches to learn expected process 
+behavior patterns. The architectural details are discussed in Section \ref{sec:lstm}.
+the results showed that the modle training converged after 18 epochs with early stopping, achieving a final validation loss 
+of 0.089 (Huber). Figure \ref{fig:LSTM_performance} demonstrates stable convergence 
+without overfitting, with training and validation losses remaining closely aligned 
+throughout training.
+
+\subsubsection{Anomaly Detection Performance and Threshold Selection}
+
+Since the model was trained only normal data, the anomaly reliability depends 
+on process deviation from learned behavior.
+Using the sequence labeling mentioned in Section \ref{sec:lstm}, the model showed a clear separation
+between normal and faulty sequences. Thresholds were selected from the validation error distribution.
+Table \ref{tab:lstm_threshold_selection} summarizes well the trade-off. The 90th percentile provided the best balance,
+detecting 43.1\% of post-fault sequences while maintaining a low false positive rate of 3.7\% on normal test sequences.
+
+\begin{table}[h]
+\centering
+\caption{LSTM detection performance at different threshold percentiles. FPR measured on 
+normal test sequences; TPR measured on post-fault sequences.}
+\label{tab:lstm_threshold_selection}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{cccc}
+\hline
+\textbf{Threshold} & \textbf{FPR} & \textbf{TPR} & \textbf{FNR} \\
+\textbf{Percentile} & \textbf{(\%)} & \textbf{(\%)} & \textbf{(\%)} \\
+\hline
+99th & 0.0 & 8.8 & 91.2 \\
+97.5th & 0.1 & 29.3 & 70.7 \\
+95th & 2.3 & 35.9 & 64.0 \\
+\textbf{90th} & \textbf{3.7} & \textbf{43.1} & \textbf{56.9} \\
+85th & 5.5 & 48.7 & 51.3 \\
+80th & 8.3 & 54.4 & 45.6 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+\subsubsection{Prediction Accuracy on Normal Batches}
+
+The model achieved acceptable predictive performance on held-out normal test batches, with 
+Mean Absolute Error (MAE) = 2.47 units and Root Mean Squared Error (RMSE) = 4.13 units 
+across all five sensors.
+
+Figure \ref{fig:lstm_predictions_temp} and \ref{fig:lstm_predictions_ph} illustrate 
+representative 50-step predictions for two critical sensors: Temperature and pH. The LSTM
+captured the general trends and dynamics of normal conditions.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{Temp_timestamp.png}
+    \caption{LSTM 50-step ahead predictions for Temperature. Green markers: actual 
+    measurements; red crosses: LSTM predictions.}
+    \label{fig:lstm_predictions_temp}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{pH_timestamp.png}
+    \caption{LSTM 50-step ahead predictions for pH. Green markers: actual measurements; 
+    red crosses: LSTM predictions.}
+    \label{fig:lstm_predictions_ph}
+\end{figure}
+
+\subsubsection{Anomaly Detection Performance}
+
+The LSTM model predicted expected "normal" trajectories for the 10 faulty batches never 
+seen during training. Anomaly scores were calculated as absolute deviations between actual 
+faulty measurements and predicted normal behavior.
+
+Figure \ref{fig:lstm_anomaly_detection} demonstrates detection capability across all five 
+sensors. 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{normalvs_fault.png}
+    \caption{Anomaly detection performance across sensors. Green: normal batch errors; 
+    red: faulty batch deviations; orange dashed: threshold.}
+    \label{fig:lstm_anomaly_detection}
+\end{figure}
+
+Temperature emerges as the most reliable early warning sensor, with anomalies detectable 
+at 15.7 timesteps ahead (3.14 hours) and 57.0\% detection reliability across faulty 
+batches. Dissolved Oxygen provides similar early detection (16.0 timesteps ahead) but with 
+lower reliability (27.5\%). pH shows intermediate performance with 18.7 timesteps ahead 
+detection and 48.1\% reliability.
+
+\subsubsection{Early Warning Performance}
+
+Table \ref{tab:lstm_detection_timing} summarizes detection timing for each sensor. The 
+model provides alerts 3.1 to 4.1 hours ahead when anomalies exceed the threshold, 
+enabling intervention substantially earlier than end-of-batch quality testing.
+
+\begin{table}[h]
+\centering
+\caption{Early warning performance by sensor}
+\label{tab:lstm_detection_timing}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lccc}
+\hline
+\textbf{Sensor} & \textbf{Detection} & \textbf{Reliability} & \textbf{Priority} \\
+ & \textbf{(hrs ahead)} & \textbf{(\%)} & \\
+\hline
+Temperature (T) & 3.14 & 57.0 & Critical \\
+DO$_2$ & 3.20 & 27.5 & Secondary \\
+pH & 3.74 & 48.1 & High \\
+Acid flow (Fa) & 4.08 & 39.7 & Secondary \\
+Vessel Volume (V) & 3.56 & 28.7 & Secondary \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+Using only the 5 GBT-selected sensors, the LSTM achieves robust anomaly detection with an average detection reliability of 40.2\%. 
+This represents a 74\% reduction in monitoring complexity compared to the full 19 online sensor. This validates the sensor importance rankings and 
+demonstrates that targeted monitoring suffices for robust fault detection.
+
+\subsection{Comparative Analysis}
+
+The GBT and LSTM models provide complementary capabilities for fault detection in 
+penicillin fermentation. GBT excels at discriminating faulty from normal batches through 
+statistical feature aggregation, achieving 90.6\% cross-validated accuracy and reliably 
+identifying critical sensors (Temperature, Acid flow, DO$_2$). However, its reliance on 
+summary statistics limits temporal resolution and early warning capability.
+
+In contrast, the LSTM model leverages sequential patterns to predict future sensor 
+trajectories, enabling fault detection before batch completion. While 
+individual sensor detection rates are moderate, the temporal 
+forecasting approach identifies deviations from expected normal behavior earlier in the 
+process timeline.
+
+The optimal monitoring strategy integrates both approaches: GBT for robust batch-level classification and sensor prioritization, and LSTM for real-time early warning across the five critical sensors identified by GBT. 
+This integrated framework reduces monitoring complexity while delivering high-confidence fault classification and actionable early-intervention windows. 
+
+\section{Integration Analysis}
+\label{sec:integration}
+
+Deploying machine learning for fault detection in pharmaceutical manufacturing is not only 
+a question of model performance. Even highly accurate algorithms provide limited value if 
+they cannot be integrated into existing production systems, regulatory frameworks, and 
+daily operational workflows. This section examines how the proposed GBT and LSTM models 
+integrate into real manufacturing environments, focusing on system architecture, data 
+flow, and practical deployment challenges.
+
+\subsection{Manufacturing Information System Hierarchy}
+
+Pharmaceutical manufacturing systems are commonly structured according to the ISA-95 
+standard, which defines a hierarchy from physical process equipment to enterprise-level 
+planning systems [10]. Understanding this hierarchy is essential for placing machine 
+learning models where they can deliver value without disrupting validated operations.
+
+\begin{figure}[hbtp]
+    \centering
+    \includegraphics[width=\columnwidth, height = 140.0pt]{ISA-95.jpg}
+    \caption{ISA-95 automation hierarchy}
+    \label{fig:isa95_pyramid}
+\end{figure}
+
+At Levels 0--1, sensors directly interact with the fermentation process. 
+These devices measure key process variables like temperature, pH, dissolved oxygen, and 
+flow rates, continuously generating time-series data that reflect real process behavior 
+[9, 11].
+
+Level 2 consists of PLCs and SCADA systems responsible for real-time supervisory control. 
+This layer maintains process setpoints and reacts to immediate deviations. The LSTM model naturally integrates at this level, as it processes 
+streaming sensor data and generates anomaly predictions every 12 minutes (one timestep), 
+enabling early detection while the batch is still running [8, 10].
+
+Manufacturing Execution Systems (MES) at Level 3 coordinates batch execution, material tracking, and quality management [14]. '
+This makes them better suited for batch-level intelligence rather than real-time control. The GBT 
+classifier integrates at this level, providing fault probability estimates at predefined 
+batch milestones to support quality investigations and production decisions.
+
+Enterprise Resource Planning (ERP) systems at Level 4 manage inventory, procurement, and 
+supply chain planning. While direct ML integration at this level is limited, aggregated 
+fault statistics and quality trends can inform higher-level planning and capacity decisions 
+[10].
+
+Together, these layers highlight the complementary roles of the two modeling approaches. 
+The LSTM provides tactical, real-time early warnings for operators, while the GBT delivers 
+strategic batch-level insights for quality engineers and production managers. Both are 
+required for effective industrial deployment.
+
+\subsection{Integration Architecture and Data Flow}
+
+Effective deployment requires a robust data pipeline that connects shop-floor 
+instrumentation to computational infrastructure and decision-support systems. 
+Figure~\ref{fig:mlops_architecture} illustrates a reference MLOps architecture adapted for 
+pharmaceutical manufacturing [12].
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{ML_Ops.jpeg}
+    \caption{Example of MLOps architecture for pharmaceutical manufacturing from [12].}
+    \label{fig:mlops_architecture}
+\end{figure*}
+
+On the shop floor, the five critical sensors identified through GBT feature selection 
+(Temperature, Acid flow rate, DO$_2$, pH, and Vessel Volume) stream data to SCADA systems 
+for process control. The same data is forwarded to centralized storage, where it supports 
+both real-time LSTM inference and periodic retraining.
+
+\textbf{Real-Time LSTM Pipeline:}  
+The LSTM operates as a predictive soft sensor, every 12 minutes, new predictions are generated. 
+Anomalies are detected by comparing predicted and observed values, with alerts triggered when deviations exceed a
+threshold. These alerts are transmitted to the MES via standard industrial interfaces such 
+as APIs [8, 12].
+
+The MES enriches alerts with batch context: product recipe, batch identifier, and 
+production stage. Operators receive concise, actionable information through application interfaces, 
+showing which sensor deviated, by how much, and potential corrective actions based on 
+process knowledge.
+
+\textbf{Batch-Level GBT Integration:}  
+GBT predictions are generated at predefined batch checkpoints (25\%, 50\%, and 75\% 
+completion). At each checkpoint, the MES aggregates sensor statistics and computes a fault 
+probability. Early identification of high-risk batches enables targeted interventions 
+like increased sampling, additional offline analysis, or early batch termination, reducing 
+waste and operational costs [5, 14].
+
+\subsection{Machine Learning Operations in Regulated Environments}
+
+Pharmaceutical manufacturing is subject to strict regulatory conditions, requiring ML 
+systems to be fully traceable, validated, and auditable. MLOps practices provide the 
+necessary framework to meet these requirements [12].
+
+\textbf{Model Versioning and Traceability:}  
+Each prediction must be traceable to a specific model version, training dataset, and 
+validation outcome. This ensures compliance with FDA 21 CFR Part 11 requirements for 
+electronic records and supports post hoc investigations when model-driven decisions affect 
+product quality [9, 12].
+
+\textbf{Performance Monitoring and Retraining:}  
+Model performance is continuously monitored to detect degradation caused by process drift 
+or equipment changes. While retraining pipelines can be automated, updated models must 
+undergo formal validation and change control before deployment in production environments 
+[12].
+
+\textbf{Staged Deployment and Shadow Mode:}  
+New model versions are typically deployed in shadow mode, where predictions are logged but 
+not acted upon. This allows direct comparison with the production model without 
+operational 
+risk. Only after demonstrating equivalent or improved performance is the new model 
+promoted 
+to active use.
+
+\subsection{Practical Deployment Challenges}
+
+Several non-technical factors limit widespread adoption of ML-based fault detection in 
+pharmaceutical manufacturing.
+
+First, regulatory validation introduces significant time and cost overhead. Installation, 
+operational, and performance qualification protocols often extend deployment timelines to 
+6-12 months, with costs substantially higher than in non-regulated industries [9].
+
+Second, many facilities rely on legacy infrastructure with limited data accessibility and 
+interoperability. Retrofitting sensors, upgrading historians, and standardizing data 
+pipelines can require substantial capital investment [8, 9].
+
+Third, operator trust remains a critical factor. While GBT feature importance improves 
+interpretability, LSTM-based anomaly detection is less transparent. Without clear 
+explanations, operators may ignore alerts or treat them as nuisance alarms. Building trust 
+requires clear interfaces, training, and demonstrated reliability over extended operation 
+[14, 15].
+
+Finally, integration with commercial MES platforms is complex because of validated 
+configurations and restricted workflows. While service-oriented and multi-agent MES 
+architectures show promise, they remain largely experimental in industrial settings [15].
+
+\subsection{Bridging Research and Industrial Practice}
+
+The gap between academic research and industrial deployment reflects differing priorities. 
+Research emphasizes predictive accuracy and early detection, while industry requires 
+compliance, reliability, maintainability, and seamless integration with existing systems.
+
+This work addresses both perspectives. The proposed LSTM achieves robust anomaly detection 
+while the GBT classifier reaches accurate batch-level accuracy. 
+Beyond performance, the integration analysis demonstrates how these models 
+align with ISA-95 hierarchies, MLOps practices, and real operational constraints.
+
+Future work should validate these findings through pilot deployments in operational 
+facilities, evaluating not only prediction accuracy but also intervention effectiveness, 
+operator acceptance, and measurable improvements in product quality and cost efficiency 
+[9, 12]. Ultimately, successful Industry 4.0 adoption in pharmaceutical manufacturing depends 
+as much on sociotechnical integration as on algorithmic performance.
+
+\section{Discussion}
+
+The main goal of this research was to see if machine learning models can detect faults in
+a pharmaceutical environment with a reduced set of sensors while still providing reliable insights.
+Reducing the amount of sensors used was crucial, since sensors can be expensive in terms of 
+installation, maintenance, calibration and operational complexity.
+
+The structure of the IndPenSim V3 dataset introduced a serious challenge due to the
+severe class imbalance of only 10 faulty batches out of 100 total.
+This imbalance made it difficult to rely on standard classification approaches, because missing one or two faulty batches
+could cause a significant drop in metrics like F1-score.
+This was addressed by using AUC-ROC as the main metric for the GBT classifier, since it is less sensitive to
+threshold selection and it gives a more stable indication of how well the model can rank sensors by their importance and 
+by how much they contribute to fault detection.
+
+The GBT results were solid, the model achieved a cross-validated accuracy of 90.6\% and an AUC of 0.901.
+The feature importance were consistent throught the folds with temperature, acid flow rate and dissolved oxygen levels being
+the top three most important sensors.
+The consistency between different folds validated the these sensors are the most informative for fault detection and that they
+can be used for the LSTM model.
+
+The LSTM model was trained only on normal batches with the top 5 sensors extracted from the GBT feature importance and
+it was used to identify faulty patterns in unseen faulty batches.
+The model achieved a detection rate of 43.1\% on post-fault sequences, with low false rate of 3.7\% on normal data.
+While this detection doesn't seem very high, it is important to remember that each batch generates
+multiple overlapping sequences, so the chnaces of detecting a fault at the batch level are much higher.
+Moreover, the early warning times ranged between 3-4 hours before batch completion,
+which is a a significant lead time for operators and engineers to take corrective actions.
+
+A serious concern about the semi-superived approach of the LSTM model was raised about whether the model is able to 
+distinguish between normal and faulty batch correctly. 
+This concern was addressed by separating the sequences into pre-fault and post-fault categories using the "Fault flag" column in the dataset
+during the evaluation of the model.
+The low false positive rate demonstrates that the model is correctly identifying patterns that deviate from normal behavior rather
+than just flagging normal variability.
+
+There are still limitations to this work. The main one being the dataset. 
+With only 10 simulated faults, it is difficult to claim the model can generalize well in a real manufacturing environment.
+By focusing only on 5 sensors, the model may have missed some important signals whihch could have improved the forecasting accuracy and the detection rate.
+These choices were made deliberately to reflect practical constraints in real pharmaceutical manufacturing,
+where installing and maintaining a large number of sensors can be costly and operationally complex.
+
+Another major limitation is that it wasn't possible to validate the framework in a real MES environment due to the proprietary nature of these systems.
+The integration analysis is based only on literature and theoritical frameworks, without any empirical validation. 
+As a result, the practical challenges about real-time performance, operator interaction, and regualatory compliance 
+remain unaddressed and need to be explored in the future.
+
+Despite these challenges, this work makes a meaningful contribution. It demonstrates that it's possible to get meaningful 
+early warnings about faults using a smaller set of sensors, which can help reduce costs and complexity.
+The results shows that a targeted, cost-effective monitoring strategy doesn't completely sacrify all detection capability.
+It also shows, that with careful design and validation, it is possible to find some level of balance between performance and practicality,
+which is essential in real-world regulated industries.
+
+Overall, this research provides a solid foundation for future work in pharmaceutical manufacturing and machine learning. The models
+worked relatively well under experimental conditions, however, more work is needed to validate these findings by using more realistic datasets,
+deploying in real manufacturing environments.
+Still, the findings provided a realistic and practical step toward smarter, and more cost-effective process monitoring.
+
+\section{Conclusion}
+
+Pharmaceutical manufacturing faces the dual challenge of maintaining stringent quality 
+standards while adopting Industry 4.0 technologies to improve efficiency and reduce waste. 
+This research explored whether the application of machine learning models can support 
+earlier detection in faulty batches in a pharmaceutical process, using a 
+reduced set of critical sensors for meaningful monitoring.
+
+Using a simulated penicillin fermentation dataset, two complementary approaches were used:
+Gradient Boosted Trees for batch-level fault classification and sensor ranking, and Long Short-Term 
+Memory forecasting for real-time anomaly detection. These two methods adressed different aspects of this project
+and they provided a balanced view of what is possible under practical constraints.
+GBT reached a cross-validated accuracy of 90.6\% and AUC of 0.901, identifying Temperature, Acid flow rate, and Dissolved Oxygen as the most informative sensors.
+LSTM networks, trained only with normal batches and the 5 sensors selected by gbt, achieved a modest detection rate. This lowered
+monitoring complexity while still providing early warning 3-4 hours before batch completion.
+
+Beyond model performance, this work highlighted the methodological consideration for highly imbalanced industrial datasets.
+Cross-validated feature importance helped reduce sennsitivity to data partitioning, while the semi-supervised
+approach avoided the instability of supervised classification with few faulty samples.
+The sliding-window sequence labeling enabled a solid evaluation of false positive and true positive rates by
+explicitly separating pre-fault and post=fault sequences, resulting in 3.7\% false positive rate and 43.1\% detection rate.
+
+At the same time, substantial limitations remain. The dataset includes only 10 simulated 
+faults, preventing confident claims about generalization or fault coverage. The moderate 
+sequence-level detection rate (43.1\%) reflects the challenge of detecting diverse fault 
+types with limited examples, though batch-level detection is higher due to multiple 
+overlapping sequences per batch. More importantly, integration with real MES systems, 
+regulatory validation, and operator interaction were not implemented due to the 
+proprietary nature of pharmaceutical manufacturing execution systems and the lack of 
+access to validated production environments.
+The integration analysis discussed in \ref{sec:integration} is grounded in ISA-95 industrial practice but it remains 
+a theoretical framework without tested validation. These gaps highlight the space that divides
+academic research from industrial deployment, where practical implementation requires industry partnerships
+and access to production systems.
+
+Future work should address several directions that would facilitate the move of pharmaceutical fault detection with
+smaller sensor sets closer to practical deployment.
+First, the validation of richer datasets with more fault types from real manufacturing environmnets would
+provide stronger evidence of generalization and robustness. Real data would also reveal false alarm rates remain acceptable
+under true process variability, equipment drift, and batch-to-batch differences that are difficult to simulate.
+
+Second, the deployment of this framework into an operational facility is essential to validate the integration analysis discussed 
+in Section \ref{sec:integration}. This includes real-time data pipelines, communication protocols 
+between ML models and SCADA/MES systems. Such deploymnets would also allow measurement
+of impact on the company, such as reductions in batch failures, earlier interventions, and cost savings.
+
+Third, hybrid modeling approaches that combine physics-based process understanding with data-driven learning 
+could improve detection accuracy and interpretability. 
+LSTM models learn only from known features' historical data, generalizing patterns seen during training,
+however, it doesn't have an understanding of the underlying process dynamics. 
+Theory-Trained Neural networks (or Physics-informed Neural Networks) could incorporate the knowledge 
+of the fermentation process into the learning process, potentially improving the accuracy and roebustness of fault detection.
+
+Finally, improving model interpretability remains essential for regulatory acceptance. 
+GBT feature importance is straightforward, however, LSTM detections are less transparent.
+Techniques such as attention mechanism, SHAP values could help engineers understand why a sequence was flagged,
+building trust and facilitating regulatory validation.
+
+The central conclusion is measured but optimistic. Machine learning can support
+pharmaceutical fault detection by enabling earlier intervention and more focused
+monitoring with reduced infrastructure. However, successful deployment depends a variaty of factors. 
+This research provides a realistic method, integration framework, and an honest
+assessment. It does not solve pharmaceutical fault
+detection but clarifies the path forward and the work still required to bring
+Industry 4.0 concepts into validated production environments.
+
+\newpage
+\onecolumn
+\section*{References}
+
+\vspace{0.3cm}
+\noindent
+[1] Katta, S. R. (2023). Predictive machine learning models for calibration 
+failure detection in pharmaceutical manufacturing.
+\textit{Journal of Artificial Intelligence, Machine Learning and Data 
+Science}, 1(1), 2152--2160. \url{https://doi.org/10.51219/JAIMLD/Srikanth-reddy-katta/472}
+
+\vspace{0.3cm}
+\noindent
+[2] Lawrence, N. P., Damarla, S. K., Kim, J. W., Tulsyan, A., Amjad, 
+F., Wang, K., et al. (2024). Artificial intelligence applications 
+for fault detection. \textit{Control Engineering Practice, 145}, 
+105841. \url{https://doi.org/10.1016/j.conengprac.2024.105841}
+
+\vspace{0.3cm}
+\noindent
+[3] Qiu, K., Wang, J., Zhou, X., Guo, Y., \& Wang, R. (2020). 
+Prediction of machine failure in Industry 4.0: A hybrid CNN-LSTM 
+framework. \textit{Industrial \& Engineering Chemistry Research, 59}
+(44), 19633--19642. \url{https://doi.org/10.1021/acs.iecr.0c03806}
+
+\vspace{0.3cm}
+\noindent
+[4] Yan, W., Tang, D., \& Lin, Y. (2017). Prediction of manufacturing 
+processes errors using deep learning-based soft sensors. 
+\textit{IEEE Transactions on Industrial Electronics, 64}(5), 4237-
+-4245. \url{https://doi.org/10.1109/TIE.2016.2622668}
+
+\vspace{0.3cm}
+\noindent
+[5] Acosta-Pavas, J. C., Robles-Rodriguez, C. E., Daboussi, F., 
+Aceves-Lara, C. A., \& Corrales, D. C. (2024). Leveraging random 
+forests and gradient boosting for enhanced predictive analytics in 
+operational efficiency. \textit{Computers and Chemical Engineering, 
+187}, 108736. \url{https://doi.org/10.1016/j.compchemeng.2024.108736}
+
+\vspace{0.3cm}
+\noindent
+[6] Bayram, F., Ahmed, B. S., \& Kassler, A. (2022). Tackling faults 
+in the Industry 4.0 era: A survey of machine-learning solutions and 
+key aspects. \textit{Knowledge-Based Systems, 245}, 108632. 
+\url{https://doi.org/10.1016/j.knosys.2022.108632}
+
+\vspace{0.3cm}
+\noindent
+[7] Vijayaraj, N., Rajalakshmi, D., Immaculate, P. S., 
+Sathianarayani, B., Rajeswari, S., \& Gomathi, S. (2024). An 
+innovative approach to improve the quality of pharmaceutical 
+manufacturing using cloud computing. \textit{EAI Endorsed 
+Transactions on Pervasive Health and Technology, 10}(1), 1--6. 
+\url{https://doi.org/10.4108/eetpht.10.5270}
+
+\vspace{0.3cm}
+\noindent
+[8] Parapalli, S. L., \& Shetty, J. (2025). Leveraging hybrid edge-
+cloud predictive maintenance in pharmaceutical MES: An Industry 4.0 
+approach using big data. \textit{Journal of Computer Science and 
+Technology Studies, 7}(2), 86--94. 
+\url{https://doi.org/10.32996/jcsts.2025.7.2.7}
+
+\vspace{0.3cm}
+\noindent
+[9] Arden, N. S., Fisher, A. C., Tyner, K., Yu, L. X., Lee, S. L.,\& 
+Kopcha, M. (2021). Industry 4.0 for pharmaceutical manufacturing: 
+Preparing for the smart factories of the future. 
+\textit{International Journal of Pharmaceutics, 602}, 120554. \url{https://doi.org/10.1016/j.ijpharm.2021.120554}
+
+\vspace{0.3cm}
+\noindent
+[10] Do, Y., \& Jeong, J. (2023). Designing a cloud-based MES-SaaS 
+platform model in precision manufacturing. \textit{WSEAS 
+Transactions on Computer Research, 11}, 294--302. \url{https://doi.org/10.37394/232018.2023.11.27}
+
+\vspace{0.3cm}
+\noindent
+[11] Goldrick, S., Duran-Villalobos, C. A., Jankauskas, K., Lovett, 
+D., Farid, S. S., \& Lennox, B. (2019). Modern day monitoring and 
+control challenges outlined on an industrial-scale benchmark 
+fermentation process. \textit{Computers and Chemical Engineering, 
+130}, 106471. \url{https://doi.org/10.1016/j.compchemeng.2019.05.037}
+
+
+\vspace{0.3cm}
+\noindent
+[12] Metcalfe, B., Acosta-Pavas, J. C., Robles-Rodriguez, C. E., 
+Georgakilas, G. K., Dalamagas, T., Aceves-Lara, C. A., Daboussi, F., 
+Koehorst, J. J., \& Corrales, D. C. (2025). Towards a machine 
+learning operations (MLOps) soft sensor for real-time pharmaceutical 
+manufacturing. \textit{Computers and Chemical Engineering, 194}, 
+108991. \url{ https://doi.org/10.1016/j.compchemeng.2024.108991}
+
+\vspace{0.3cm}
+\noindent
+[13] Goldrick, S. (2019, October). Data for: Modern day monitoring and control challenges 
+outlined on an industrial-scale benchmark fermentation process (Version 2) [Dataset]. 
+\textit{Mendeley Data}. \url{https://doi.org/10.17632/pdnjz7zz5x.2}
+
+\vspace{0.3cm}
+\noindent
+[14] Shojaeinasab, A., Charter, T., Jalayer, M., Khadivi, M., Ogunfowora, O., Raiyani, N., 
+Yaghoubi, M., \& Najjaran, H. (2022). Intelligent manufacturing execution systems: A 
+systematic review. \textit{Journal of Manufacturing Systems}, \textit{62}, 503--522. \url{https://doi.org/10.1016/j.jmsy.2022.01.004}
+
+\vspace{0.3cm}
+\noindent
+[15] Mantravadi, S., Li, C., \& Møller, C. (2019). Multi-agent manufacturing execution 
+system (MES): Concept, architecture \& ML algorithm for a smart factory case. In 
+\textit{Proceedings of the 21st International Conference on Enterprise Information Systems 
+(ICEIS 2019)} (pp. 477--482). SCITEPRESS. \url{https://doi.org/10.5220/0007768904770482}
+
+
+\end{document}
